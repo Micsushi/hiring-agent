@@ -1,5 +1,5 @@
 from typing import List, Optional, Dict, Tuple, Any, Protocol, runtime_checkable
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, model_validator
 
 
 @runtime_checkable
@@ -212,12 +212,34 @@ class CategoryScore(BaseModel):
     max: int = Field(gt=0, description="Maximum possible score")
     evidence: str = Field(min_length=1, description="Evidence supporting the score")
 
+    @model_validator(mode="after")
+    def score_cannot_exceed_max(self) -> "CategoryScore":
+        if self.score > self.max:
+            raise ValueError("score cannot exceed category maximum")
+        return self
+
 
 class Scores(BaseModel):
     open_source: CategoryScore
     self_projects: CategoryScore
     production: CategoryScore
     technical_skills: CategoryScore
+
+    @model_validator(mode="after")
+    def use_rubric_category_maxima(self) -> "Scores":
+        expected_maxima = {
+            "open_source": 35,
+            "self_projects": 30,
+            "production": 25,
+            "technical_skills": 10,
+        }
+        for category_name, expected_max in expected_maxima.items():
+            category = getattr(self, category_name)
+            if category.max != expected_max:
+                raise ValueError(
+                    f"{category_name} maximum must be {expected_max}, got {category.max}"
+                )
+        return self
 
 
 class BonusPoints(BaseModel):
@@ -237,8 +259,8 @@ class EvaluationData(BaseModel):
     scores: Scores
     bonus_points: BonusPoints
     deductions: Deductions
-    key_strengths: List[str] = Field(min_items=1, max_items=5)
-    areas_for_improvement: List[str] = Field(min_items=1, max_items=5)
+    key_strengths: List[str] = Field(min_length=1, max_length=5)
+    areas_for_improvement: List[str] = Field(min_length=1, max_length=3)
 
 
 class GitHubProfile(BaseModel):
